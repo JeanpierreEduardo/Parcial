@@ -1,0 +1,21 @@
+import {construirNav,ENLACES_ADMIN,ENLACES_EMPLEADO} from './navegacion.js';
+import { api } from '../config/neon-config.js';
+const CLAVE='cinemax_perfil';
+function guardar(u){sessionStorage.setItem(CLAVE,JSON.stringify(u));return u;}
+export function obtenerSesion(){try{return JSON.parse(sessionStorage.getItem(CLAVE))}catch{return null}}
+export async function obtenerPerfil(){try{return guardar(await api('/auth/me'))}catch(e){sessionStorage.removeItem(CLAVE);throw e}}
+export async function registrarUsuario(nombre,correo,contrasena){return guardar(await api('/auth/registro',{method:'POST',body:JSON.stringify({nombre,correo,contrasena})}))}
+export async function iniciarSesion(correo,contrasena){return guardar(await api('/auth/login',{method:'POST',body:JSON.stringify({correo,contrasena})}))}
+export async function cerrarSesion(){try{await api('/auth/logout',{method:'POST'});sessionStorage.removeItem(CLAVE);location.replace('index.html')}catch(e){alert(e.message)}}
+export function exigirSesion(){const u=obtenerSesion();if(!u)location.replace('login.html?motivo=protegido&next='+encodeURIComponent(location.pathname.split('/').pop()+location.search));return u}
+export async function guardarReserva(data){return api('/compras',{method:'POST',body:JSON.stringify(data)})}
+export async function obtenerReservas(){return api('/compras')}
+async function mostrarNav(){let u;try{u=await obtenerPerfil()}catch{}construirNav(document,u,cerrarSesion,location.pathname.split('/').pop());
+ const pagina=location.pathname.split('/').pop()||'index.html';
+ const privadas=[...ENLACES_ADMIN.map(e=>e[1]),'panel.html'];
+ if(u?.rol==='administrador'&&!privadas.includes(pagina)&&pagina!=='login.html')location.replace('administracion-clientes.html');
+ if(u?.rol==='empleado'&&!ENLACES_EMPLEADO.some(e=>e[1]===pagina)&&pagina!=='login.html')location.replace('venta-entradas.html');
+}
+const guardado=obtenerSesion();
+if(['administrador','empleado'].includes(guardado?.rol))document.documentElement.dataset.rol=guardado.rol;
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mostrarNav);else mostrarNav();
