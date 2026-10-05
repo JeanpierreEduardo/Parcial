@@ -1,9 +1,12 @@
+import {FUERA_TURNO,SIN_TURNO} from '../turnos/turnos.js';
 import {destinoSesion} from './navegacion.js';
 import { registrarUsuario, iniciarSesion, obtenerSesion, obtenerPerfil } from './auth.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const params = new URLSearchParams(location.search);
   const next = params.get('next') || 'index.html';
+  if(params.get('motivo')==='fuera-turno')document.getElementById('login-error').textContent=FUERA_TURNO;
+  if(params.get('motivo')==='sin-turno')document.getElementById('login-error').textContent=SIN_TURNO;
   const destination = /^(registro|consulta|actualizar|panel)\.html(?:\?[a-zA-Z0-9=&_%+-]*)?$/.test(next) ? next : 'index.html';
   if (obtenerSesion()) {
     try { const user=await obtenerPerfil(); location.replace(destinoSesion(user,destination)); return; }

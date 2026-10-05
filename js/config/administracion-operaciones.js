@@ -1,3 +1,4 @@
+import {validarTurno} from '../turnos/turnos.js';
 import {operacionesClientes} from './clientes-operaciones.js';
 export function validarPelicula(d){
  const clave=String(d.clave||'').trim().toLowerCase(),titulo=String(d.titulo||'').trim(),genero=String(d.genero||'').trim(),clasificacion=String(d.clasificacion||'').trim(),sala=String(d.sala||'').trim(),sinopsis=String(d.sinopsis||'').trim(),poster=String(d.poster||'img/im2.jpg').trim(),duracion=Number(d.duracion);
@@ -12,7 +13,7 @@ function validarTrabajador(d,crear=false){
  if(nombre.length<3||nombre.length>120||correo.length>120||!/^\S+@\S+\.\S+$/.test(correo)||!['administrador','empleado'].includes(d.rol))throw Error('Revisa nombre, correo y rol del trabajador.');
  const contrasena=String(d.contrasena||'');if((crear||contrasena)&&(contrasena.length<8||contrasena.length>128))throw Error('La contraseña debe tener 8 a 128 caracteres.');
  if(!crear&&!['true','false',true,false].includes(d.activo))throw Error('Estado del trabajador inválido.');
- return {nombre,correo,rol:d.rol,activo:crear?true:(d.activo===true||d.activo==='true'),contrasena};
+ return {nombre,correo,rol:d.rol,activo:crear?true:(d.activo===true||d.activo==='true'),contrasena,...validarTurno(d)};
 }
 export async function operacionesAdmin(sql,u,ruta,method,d,{aleatorio,hash}){
  if(u.rol!=='administrador')throw Error('Esta sección es exclusiva del administrador.');
@@ -29,13 +30,13 @@ export async function operacionesAdmin(sql,u,ruta,method,d,{aleatorio,hash}){
  }
  const trabajador=/^\/admin\/trabajadores(?:\/([1-9][0-9]*))?$/.exec(ruta);
  if(trabajador){const id=trabajador[1]?Number(trabajador[1]):null;
-  if(method==='GET')return sql`SELECT id,nombre,correo,rol,activo,fecha_registro FROM usuarios WHERE rol IN ('administrador','empleado') ORDER BY nombre`;
+  if(method==='GET')return sql`SELECT id,nombre,correo,rol,activo,fecha_registro,turno_nombre,turno_inicio,turno_fin FROM usuarios WHERE rol IN ('administrador','empleado') ORDER BY nombre`;
   if((method==='POST'&&!id)||(method==='PUT'&&id)){
    const t=validarTrabajador(d,method==='POST');let rows;
    if(id===u.id&&(!t.activo||t.rol!=='administrador'))throw Error('No puedes desactivar tu propia cuenta ni quitarte el rol administrador.');
    const salt=t.contrasena?aleatorio(16):null,passwordHash=t.contrasena?await hash(t.contrasena,salt):null;
-   if(method==='POST')rows=await sql`INSERT INTO usuarios(nombre,correo,rol,activo,contrasena_hash,salt) VALUES(${t.nombre},${t.correo},${t.rol},TRUE,${passwordHash},${salt}) RETURNING id,nombre,correo,rol,activo`;
-   else rows=await sql`UPDATE usuarios SET nombre=${t.nombre},correo=${t.correo},rol=${t.rol},activo=${t.activo},contrasena_hash=COALESCE(${passwordHash},contrasena_hash),salt=COALESCE(${salt},salt),contrasena=CASE WHEN ${passwordHash}::text IS NOT NULL THEN NULL ELSE contrasena END WHERE id=${id} AND rol IN ('administrador','empleado') RETURNING id,nombre,correo,rol,activo`;
+   if(method==='POST')rows=await sql`INSERT INTO usuarios(nombre,correo,rol,activo,contrasena_hash,salt,turno_nombre,turno_inicio,turno_fin) VALUES(${t.nombre},${t.correo},${t.rol},TRUE,${passwordHash},${salt},${t.turno_nombre},${t.turno_inicio},${t.turno_fin}) RETURNING id,nombre,correo,rol,activo,turno_nombre,turno_inicio,turno_fin`;
+   else rows=await sql`UPDATE usuarios SET nombre=${t.nombre},correo=${t.correo},rol=${t.rol},activo=${t.activo},turno_nombre=${t.turno_nombre},turno_inicio=${t.turno_inicio},turno_fin=${t.turno_fin},contrasena_hash=COALESCE(${passwordHash},contrasena_hash),salt=COALESCE(${salt},salt),contrasena=CASE WHEN ${passwordHash}::text IS NOT NULL THEN NULL ELSE contrasena END WHERE id=${id} AND rol IN ('administrador','empleado') RETURNING id,nombre,correo,rol,activo`;
    if(!rows[0])throw Error('Trabajador no encontrado.');return rows[0];
   }
  }

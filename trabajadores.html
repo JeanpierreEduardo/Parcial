@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Trabajadores | CineMax Administración</title>
     <link rel="stylesheet" href="css/trabajadores.css">
+    <link rel="stylesheet" href="css/mejoras.css">
 </head>
 
 <body>
@@ -39,6 +40,7 @@
                                 <th>Nombre</th>
                                 <th>Correo</th>
                                 <th>Rol</th>
+                                <th>Turno laboral</th>
                                 <th>Acceso</th>
                                 <th>Acción</th>
                             </tr>
@@ -69,6 +71,21 @@
                                 <option value="false">Inactiva</option>
                             </select>
                         </label>
+                        <fieldset class="ancho campos-turno" data-campos-turno>
+                            <legend>Turno laboral del empleado</legend>
+                            <div class="turno-form">
+                                <label>Nombre del turno
+                                    <input name="turno_nombre" maxlength="60" placeholder="Ej. Mañana, tarde o noche" required>
+                                </label>
+                                <label>Hora de inicio
+                                    <input name="turno_inicio" type="time" step="60" required>
+                                </label>
+                                <label>Hora de fin
+                                    <input name="turno_fin" type="time" step="60" required>
+                                </label>
+                            </div>
+                            <p class="nota-reporte">Horario diario en hora de Perú. Si la hora final es anterior a la inicial, el turno termina al día siguiente. El acceso se bloquea desde la hora de fin.</p>
+                        </fieldset>
                         <div class="acciones">
                             <button type="submit" class="boton boton-primario">Guardar cambios</button>
                             <button type="button" class="boton" id="cancelar">Cancelar</button>

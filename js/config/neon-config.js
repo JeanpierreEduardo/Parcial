@@ -1,5 +1,6 @@
+import {esErrorTurno} from '../turnos/turnos.js';
 import { neon } from './vendor/neon-driver.js';
-import { MIGRACION, MIGRACION_ADMIN, MIGRACION_EMPLEADO } from './esquema.js';
+import { MIGRACION, MIGRACION_ADMIN, MIGRACION_EMPLEADO, MIGRACION_TURNOS } from './esquema.js';
 import { crearOperaciones } from './operaciones.js';
 
 // ÚNICO LUGAR PARA PEGAR TU CONEXIÓN. Usa la cadena completa de Neon > Connect.
@@ -28,6 +29,12 @@ async function prepararEsquema(sql) {
  if (!(admin.peliculas && admin.activo && admin.enlace)) await sql.transaction(MIGRACION_ADMIN.map(texto=>sql.query(texto)));
  const [empleado]=await sql`SELECT to_regclass('public.asientos_ventas') IS NOT NULL AS asientos, EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='compras_entradas_cine' AND column_name='asientos_vendidos') AS vendedor`;
  if(!(empleado.asientos&&empleado.vendedor))await sql.transaction(MIGRACION_EMPLEADO.map(texto=>sql.query(texto)));
+ const [turnos]=await sql`SELECT
+  EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='usuarios' AND column_name='turno_nombre') AS nombre,
+  EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='usuarios' AND column_name='turno_inicio') AS inicio,
+  EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='usuarios' AND column_name='turno_fin') AS fin,
+  to_regprocedure('public.cinemax_en_turno(time without time zone,time without time zone,timestamp with time zone)') IS NOT NULL AS funcion`;
+ if(!(turnos.nombre&&turnos.inicio&&turnos.fin&&turnos.funcion))await sql.transaction(MIGRACION_TURNOS.map(texto=>sql.query(texto)));
 }
 // 'api' conserva la interfaz de los módulos de página; ejecuta SQL directo en Neon.
 // No usa localhost:3000, un servidor Node, cookies ni rutas HTTP de una API local.
@@ -37,6 +44,7 @@ export async function api(ruta, opciones={}) {
   operaciones ??= crearOperaciones(sql,sessionStorage,crypto);
   return await operaciones(ruta,opciones);
  } catch (error) {
+  if(esErrorTurno(error)&&ruta!=='/auth/login')window.dispatchEvent(new CustomEvent('cinemax:turno-bloqueado',{detail:error.message}));
   if (error.code==='23505') throw new Error(error.constraint==='asiento_funcion_unico'?'Uno de los asientos acaba de ocuparse. Actualiza el mapa y selecciona otros.':'Ese correo o código ya está registrado.');
   if (error.code==='23503') throw new Error('El cliente seleccionado no existe.');
   if (['42P01','42703'].includes(error.code)) throw new Error('Faltan tablas o campos. Ejecuta sql/neon_schema.sql en Neon SQL Editor.');

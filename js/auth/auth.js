@@ -1,6 +1,23 @@
+import {esErrorTurno,FUERA_TURNO} from '../turnos/turnos.js';
 import {construirNav,ENLACES_ADMIN,ENLACES_EMPLEADO} from './navegacion.js';
 import { api } from '../config/neon-config.js';
 const CLAVE='cinemax_perfil';
+let comprobandoTurno=false,bloqueandoTurno=false;
+window.addEventListener('cinemax:turno-bloqueado',event=>{
+ sessionStorage.removeItem(CLAVE);
+ if(location.pathname.endsWith('/login.html')){const error=document.getElementById('login-error');if(error)error.textContent=event.detail;return;}
+ if(bloqueandoTurno)return;bloqueandoTurno=true;
+ const contenido=document.getElementById('contenido-empleado');if(contenido)contenido.hidden=true;
+ location.replace('login.html?motivo='+encodeURIComponent(event.detail===FUERA_TURNO?'fuera-turno':'sin-turno'));
+});
+async function comprobarTurno(){
+ if(comprobandoTurno||obtenerSesion()?.rol!=='empleado')return;
+ comprobandoTurno=true;
+ try{guardar(await api('/auth/me'))}catch(error){if(esErrorTurno(error))sessionStorage.removeItem(CLAVE);}finally{comprobandoTurno=false;}
+}
+// Cada acción consulta el turno en Neon; este control cierra también una pantalla inactiva.
+setInterval(comprobarTurno,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)comprobarTurno();});
 function guardar(u){sessionStorage.setItem(CLAVE,JSON.stringify(u));return u;}
 export function obtenerSesion(){try{return JSON.parse(sessionStorage.getItem(CLAVE))}catch{return null}}
 export async function obtenerPerfil(){try{return guardar(await api('/auth/me'))}catch(e){sessionStorage.removeItem(CLAVE);throw e}}

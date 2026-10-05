@@ -49,3 +49,12 @@ export const MIGRACION_EMPLEADO = [
   "DROP TRIGGER IF EXISTS proteger_asientos_venta_trigger ON compras_entradas_cine",
   "CREATE TRIGGER proteger_asientos_venta_trigger BEFORE UPDATE ON compras_entradas_cine FOR EACH ROW EXECUTE FUNCTION proteger_asientos_venta()"
 ];
+
+// Turnos diarios. La hora válida proviene de Neon y usa America/Lima.
+export const MIGRACION_TURNOS = [
+  "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS turno_nombre VARCHAR(60)",
+  "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS turno_inicio TIME",
+  "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS turno_fin TIME",
+  "DO $$ BEGIN\n IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='usuarios_turno_cinemax_check' AND conrelid='usuarios'::regclass) THEN\n ALTER TABLE usuarios ADD CONSTRAINT usuarios_turno_cinemax_check CHECK (\n  (turno_nombre IS NULL AND turno_inicio IS NULL AND turno_fin IS NULL) OR\n  (turno_nombre IS NOT NULL AND length(trim(turno_nombre)) BETWEEN 1 AND 60 AND turno_inicio IS NOT NULL AND turno_fin IS NOT NULL AND turno_inicio<>turno_fin)\n );\n END IF;\nEND $$",
+  "CREATE OR REPLACE FUNCTION cinemax_en_turno(inicio TIME, fin TIME, instante TIMESTAMPTZ DEFAULT NOW())\nRETURNS BOOLEAN LANGUAGE SQL STABLE AS $$\n SELECT COALESCE(CASE\n  WHEN inicio < fin THEN (instante AT TIME ZONE 'America/Lima')::time >= inicio AND (instante AT TIME ZONE 'America/Lima')::time < fin\n  WHEN inicio > fin THEN (instante AT TIME ZONE 'America/Lima')::time >= inicio OR (instante AT TIME ZONE 'America/Lima')::time < fin\n  ELSE FALSE END, FALSE);\n$$"
+];

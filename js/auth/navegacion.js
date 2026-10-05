@@ -8,7 +8,8 @@ export function destinoSesion(usuario,solicitado='index.html'){
 export function construirNav(doc,u,cerrar,pagina=''){
  const c=doc.getElementById('nav-cuenta');if(!c)return;doc.documentElement.dataset.rol=u?.rol||'visitante';c.replaceChildren();
  const enlace=(texto,href,css='boton boton-registro boton-nav')=>{const a=doc.createElement('a');a.textContent=texto;a.href=href;a.className=css;return a};
- if(u){const nombre=doc.createElement('span');nombre.textContent=u.nombre;const salir=doc.createElement('button');salir.type='button';salir.className='boton boton-primario boton-nav';salir.textContent='Cerrar sesión';salir.addEventListener('click',cerrar);
+ if(u){const nombre=doc.createElement('div');nombre.className='nav-identidad';const textoNombre=doc.createElement('span');textoNombre.textContent=u.nombre;nombre.append(textoNombre);
+  if(['administrador','empleado'].includes(u.rol)){const rol=doc.createElement('small');rol.className='nav-rol';rol.textContent=u.rol==='administrador'?'Administrador':'Trabajador';nombre.append(rol);}const salir=doc.createElement('button');salir.type='button';salir.className='boton boton-primario boton-nav';salir.textContent='Cerrar sesión';salir.addEventListener('click',cerrar);
   if(['administrador','empleado'].includes(u.rol)){
    const header=doc.querySelector('.site-header'),nav=doc.querySelector('.nav-principal');header?.classList.add('nav-administrativa');
    if(nav){nav.setAttribute('data-admin-lista','true');nav.replaceChildren();const ul=doc.createElement('ul');for(const [texto,href]of(u.rol==='administrador'?ENLACES_ADMIN:ENLACES_EMPLEADO)){const li=doc.createElement('li'),a=enlace(texto,href,'');if(pagina===href){a.className='activo';a.setAttribute('aria-current','page')}li.append(a);ul.append(li)}nav.append(ul)}

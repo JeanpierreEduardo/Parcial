@@ -1,3 +1,4 @@
+import {FUERA_TURNO,SIN_TURNO} from '../turnos/turnos.js';
 import {operacionesEmpleado} from './empleado-operaciones.js';
 import {operacionesAdmin} from './administracion-operaciones.js';
 import {esPersonal,validarCompra,serializarCompra} from './reglas.js';
@@ -10,9 +11,29 @@ export function crearOperaciones(sql,storage,cryptoApi) {
  const bytes=s=>new Uint8Array(s.match(/../g).map(x=>parseInt(x,16)));
  const sha=async s=>hex(await cryptoApi.subtle.digest('SHA-256',new TextEncoder().encode(s)));
  async function hash(password,salt){const key=await cryptoApi.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);return hex(await cryptoApi.subtle.deriveBits({name:'PBKDF2',salt:bytes(salt),iterations:180000,hash:'SHA-256'},key,256));}
- const perfil=u=>({id:u.id,nombre:u.nombre,correo:u.correo,rol:u.rol});
- async function nuevaSesion(u){const token=aleatorio(32);const tokenHash=await sha(token);await sql`INSERT INTO sesiones_cinemax(token_hash,id_usuario,expira) VALUES(${tokenHash},${u.id},NOW()+INTERVAL '8 hours')`;storage.setItem(TOKEN,token);return perfil(u)}
- async function sesion(){const token=storage.getItem(TOKEN);if(!token)throw Error('Inicia sesión para continuar.');const tokenHash=await sha(token);const rows=await sql`SELECT u.id,u.nombre,u.correo,u.rol FROM sesiones_cinemax s JOIN usuarios u ON u.id=s.id_usuario WHERE s.token_hash=${tokenHash} AND s.expira>NOW() AND u.activo=TRUE`;if(!rows[0]){storage.removeItem(TOKEN);throw Error('Tu sesión caducó. Inicia sesión nuevamente.')}return rows[0]}
+ const perfil=u=>({id:u.id,nombre:u.nombre,correo:u.correo,rol:u.rol,turno_nombre:u.turno_nombre,turno_inicio:u.turno_inicio,turno_fin:u.turno_fin});
+ function verificarTurno(u){if(u.rol!=='empleado')return;if(!u.turno_inicio||!u.turno_fin||!u.turno_nombre)throw Error(SIN_TURNO);if(!u.en_turno)throw Error(FUERA_TURNO);}
+ async function nuevaSesion(u){
+  verificarTurno(u);
+  const token=aleatorio(32),tokenHash=await sha(token);
+  // Revalidar el turno en la misma sentencia que crea la sesión.
+  const creada=await sql`INSERT INTO sesiones_cinemax(token_hash,id_usuario,expira)
+   SELECT ${tokenHash},id,NOW()+INTERVAL '8 hours' FROM usuarios WHERE id=${u.id} AND activo=TRUE
+   AND (rol<>'empleado' OR cinemax_en_turno(turno_inicio,turno_fin)) RETURNING token_hash`;
+  if(!creada[0])throw Error(u.rol==='empleado'?FUERA_TURNO:'No se pudo iniciar sesión.');
+  storage.setItem(TOKEN,token);return perfil(u);
+ }
+ async function sesion(){
+  const token=storage.getItem(TOKEN);if(!token)throw Error('Inicia sesión para continuar.');
+  const tokenHash=await sha(token);
+  const rows=await sql`SELECT u.id,u.nombre,u.correo,u.rol,u.turno_nombre,u.turno_inicio,u.turno_fin,
+   cinemax_en_turno(u.turno_inicio,u.turno_fin) AS en_turno
+   FROM sesiones_cinemax s JOIN usuarios u ON u.id=s.id_usuario
+   WHERE s.token_hash=${tokenHash} AND s.expira>NOW() AND u.activo=TRUE`;
+  if(!rows[0]){storage.removeItem(TOKEN);throw Error('Tu sesión caducó. Inicia sesión nuevamente.')}
+  try{verificarTurno(rows[0])}catch(error){storage.removeItem(TOKEN);try{await sql`DELETE FROM sesiones_cinemax WHERE token_hash=${tokenHash}`}catch{}throw error;}
+  return rows[0];
+ }
  return async function operar(ruta,opciones={}) {
   const method=opciones.method||'GET';const d=opciones.body?JSON.parse(opciones.body):{};
   if(ruta==='/auth/registro'&&method==='POST'){
@@ -24,10 +45,11 @@ export function crearOperaciones(sql,storage,cryptoApi) {
   }
   if(ruta==='/auth/login'&&method==='POST'){
    if(typeof d.contrasena!=='string'||d.contrasena.length>128)throw Error('Credenciales inválidas.');
-   const rows=await sql`SELECT * FROM usuarios WHERE lower(correo)=${String(d.correo||'').trim().toLowerCase()} AND activo=TRUE LIMIT 1`;const u=rows[0];let valid=false;
+   const rows=await sql`SELECT *,cinemax_en_turno(turno_inicio,turno_fin) AS en_turno FROM usuarios WHERE lower(correo)=${String(d.correo||'').trim().toLowerCase()} AND activo=TRUE LIMIT 1`;const u=rows[0];let valid=false;
    if(u?.contrasena_hash&&/^[a-f0-9]{32}$/.test(u.salt||''))valid=await hash(d.contrasena,u.salt)===u.contrasena_hash;
    else if(u?.contrasena)valid=u.contrasena===d.contrasena;
    if(!valid)throw Error('Correo o contraseña incorrectos.');
+   verificarTurno(u);
    if(u.contrasena&&!u.contrasena_hash){const salt=aleatorio(16),passwordHash=await hash(d.contrasena,salt);await sql`UPDATE usuarios SET contrasena_hash=${passwordHash},salt=${salt} WHERE id=${u.id}`}
    return nuevaSesion(u);
   }
